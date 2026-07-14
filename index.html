@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groq AI Assistant</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #131314;
+            color: #e3e3e3;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            height: 85vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #1e1e20;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .chat-header {
+            padding: 20px;
+            background-color: #282a2d;
+            border-bottom: 1px solid #3c4043;
+            font-weight: 600;
+            font-size: 1.1rem;
+            letter-spacing: 0.5px;
+        }
+
+        .messages-box {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: #007aff;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bot-message {
+            background-color: #2e3033;
+            color: #e3e3e3;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background-color: #1e1e20;
+            border-top: 1px solid #3c4043;
+            display: flex;
+            gap: 12px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            background-color: #2a2b2e;
+            border: 1px solid #3c4043;
+            border-radius: 24px;
+            padding: 14px 20px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #007aff;
+        }
+
+        button {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            padding: 0 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0063cc;
+        }
+
+        button:disabled {
+            background-color: #4a4b4d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <div class="chat-header">Groq Ultra-Fast AI Engine</div>
+        <div class="messages-box" id="messagesBox">
+            <div class="message bot-message">Hello! I'm your local instance running over Groq. How can I help you scale today?</div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Ask anything..." autocomplete="off">
+            <button id="sendBtn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Array keeping local state of conversational memory
+        let memory = [];
+
+        const messagesBox = document.getElementById('messagesBox');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Allow pressing Enter key to trigger send action
+        userInput.addEventListener("keyup", function(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // Clear input box and lock interface state
+            userInput.value = '';
+            setLoadingState(true);
+
+            // 1. Render User Message on screen & commit to memory state
+            appendMessage(text, 'user-message');
+            memory.push({ role: 'user', content: text });
+
+            // 2. Prepare visual placeholder for incoming bot response
+            const botMessageDiv = appendMessage('Thinking...', 'bot-message');
+
+            try {
+                // 3. Fire payload off downstream to local Flask server
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: memory })
+                });
+
+                const data = await response.json();
+
+                if (data.reply) {
+                    // Update visual bubble with actual response string
+                    botMessageDiv.innerText = data.reply;
+                    // Push response to persistent ongoing loop memory
+                    memory.push({ role: 'assistant', content: data.reply });
+                } else {
+                    botMessageDiv.innerText = "Error: " + (data.error || "Failed execution loop.");
+                }
+
+            } catch (error) {
+                botMessageDiv.innerText = "Error linking up with local server.";
+                console.error(error);
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        function appendMessage(text, className) {
+            const msg = document.createElement('div');
+            msg.className = `message ${className}`;
+            msg.innerText = text;
+            messagesBox.appendChild(msg);
+            
+            // Instantly snap view scroll boundary down to newest message asset
+            messagesBox.scrollTop = messagesBox.scrollHeight;
+            return msg;
+        }
+
+        function setLoadingState(isLoading) {
+            userInput.disabled = isLoading;
+            sendBtn.disabled = isLoading;
+            if(!isLoading) {
+                userInput.focus();
+            }
+        }
+    </script>
+</body>
+</html>
